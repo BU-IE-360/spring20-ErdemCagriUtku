@@ -1,0 +1,248 @@
+---
+title: "Homework 1"
+author: "Erdem Cagri Utku - IE360 - Spring 2020"
+date: "18 04 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1.Introduction
+
+The investments in the conctruction sector in the recent times have been contraversial in Turkey, because of the similarity of the current situation of the sector to that of pre-"Great Depression" period of the US. What happened before the Great Depression and, allegedly caused it, was the speculative expansion of construction sector, that is the rise of prices and sales of houses inorganically^1^ by means of the mortgage credits^2^ provided by banks. This "housing bubble" eventually resulted in houses seized by banks which desperately look for buyers at dramatically lower prices. The aim of this analysis is to answer the question of "Is the expansion of construction sector parallel to the basic statistics of prosperity in Turkey,or is it an inorganic and dangerous expansion like the example of US in Great Depression?". For that purpose the data to be examined is, first of all, the indicators of the financial situation of people of Turkey, such as the unemployement rates, labour force participation and  consumer price indices, secondly the proportion of GDP coming from the construction sector, and thirdly the number of construction and sales of the houses along with their unit prices in Turkey.   
+
+
+# 2. Data Analysis
+
+## 2.1 Data Manupilation and Generation of xts Objects
+
+Since all of the data could not be downloaded at the same time four excel files will be read separately and merged as a single xts object. 
+
+First of all, the data is read and examined below. 
+
+```{r , warning=FALSE}
+library(xts)
+library(readxl)
+library(gsubfn)
+
+dat1 <- read_excel("EVDS.xlsx")
+dat2 <- read_excel("EVDS (1).xlsx")
+dat3 <- read_excel("EVDS (2).xlsx")
+dat4 <- read_excel("EVDS (3).xlsx")
+
+head(dat1)
+head(dat2)
+head(dat3)
+head(dat4)
+```
+
+The second row of "dat3" and "dat4" should be eliminated.
+
+```{r }
+dat3<-dat3[, -3]
+dat4<-dat4[, -3]
+```
+
+The NA values in the dates of all four data are extracted manually:
+
+```{r }
+dat1$Tarih
+dat1<-dat1[-c(212:263),]
+dat2$Tarih
+dat2<-dat2[-c(218:236),]
+dat3$Tarih
+dat3<-dat3[-c(73:84),]
+dat4$Tarih
+dat4<-dat4[-c(73:84),]
+```
+
+
+Now, let's convert all of the data to xts format, for the "Tarih" variable to be read as a date extra operations have been applied:
+
+```{r }
+xts1<-xts(dat1[-1], order.by = as.Date(as.yearmon(dat1$Tarih)))
+xts2<-xts(dat2[-1], order.by = as.Date(as.yearmon(dat2$Tarih)))
+xts3<-xts(dat3[-1], order.by = as.Date(as.yearqtr(gsub("Q","",dat3$Tarih))))
+xts4<-xts(dat4[-1], order.by = as.Date(as.yearqtr(gsub("Q","",dat4$Tarih))))
+tail(xts1)
+tail(xts2)
+tail(xts3)
+tail(xts4)
+```
+
+The data in xts 3 and xts 4 are quarterly, therefore, the data in xts1 and xts2 should be made quaterly as well.
+
+For xts1, the first three column is related to house sales, so they should be summed; and the rest of the columns are related to price indices and labour force particioation rate, these can be averaged.
+
+```{r }
+xts1<-xts1[-c(1,2),]
+ep <- endpoints(xts1, on = "months", k=3)
+xts_Q_1<-period.apply(xts1[, c(4:8)], INDEX = ep, FUN = mean)
+xts_Q_2<-period.apply(xts1[, c(1:3)], INDEX = ep, FUN = mean)
+coredata(xts_Q_2)<-coredata(xts_Q_2)*3
+tail(xts_Q_2)
+tail(xts_Q_1)
+```
+
+For xts2, both of the columns can be averaged over the quarters since both of them are the unemployement rate statistics.
+
+```{r }
+xts2<-xts2[-1,]
+ep2 <- endpoints(xts2, on = "months", k=3)
+xts_Q_3<-period.apply(xts2, INDEX = ep2, FUN = mean)
+```
+
+Now that all xts variables have the same type of dates, all the data at hand can be merged:
+
+```{r }
+xts_comb<-merge(xts_Q_2, xts_Q_1, xts_Q_3, xts3, xts4, join = "inner")
+```
+
+Some of the columns in the xts_comb object are NA before 2013. Since these variables are the essential ones for the analysis, the rows with an NA in a column will be deleted by the following command.
+
+```{r }
+xts_comb<-na.omit(xts_comb)
+```
+
+As the last step for this part, the row names will be made understandable.
+
+```{r }
+names(xts_comb)
+names(xts_comb)<-c("total.house.sales(piece)", "first.sale.house(piece)", "house.sales.foreigners(piece)","consumer.price.index","CPI.wage.earners","Residential.Property.Price.Index","Housing.Unit.Prices","Labour.force.participation.rate","Unemployment.rate","Non-agricultural.unemployment.rate","construction.GDP","GDP")
+```
+
+Consequently, this is how data finally looks like:
+
+```{r }
+head(xts_comb)
+```
+
+
+## 2.2 Data Visualisation and Analysis
+
+First of all, the financial situation of people in Turkey can be examined by labour force participation and Unemployement rates:
+
+
+```{r , echo=FALSE}
+plot(index(xts_comb),xts_comb[,'Unemployment.rate'],type = "o", ylim=range( c(xts_comb[,'Unemployment.rate'], xts_comb[,'Labour.force.participation.rate'])), col = "red", xlab = "Quarters", ylab = "Labour Force Participation and Unemployement Rate",
+main = "Figure 1: Quarterly Labour Force Participation and Unemployement Rate")
+   
+lines(index(xts_comb),xts_comb[,'Labour.force.participation.rate'], col="blue", type="o")
+
+legend(x= 'left', legend=c("Unemployement Rate", "Labour Force Participation(in Percentages)"),
+       col=c("red", "blue"), lty=1:2, cex=0.6)
+```
+
+It seems like both unemployement rate and labour force participitaion increased simultaneously. To zoom in let's plot them separately. 
+
+The unemployement rates along with non-agricultural unemployement:
+
+```{r , echo=FALSE}
+plot(index(xts_comb),xts_comb[,'Unemployment.rate'],type = "o", ylim=range( c(xts_comb[,'Unemployment.rate'], xts_comb[,'Non-agricultural.unemployment.rate'])), col = "red", xlab = "Quarters", ylab = "Unemployement and non-Agricultural Unemployement Rates",
+main = "Figure 2: Unemployement and non-Agricultural Unemployement Rate")
+   
+lines(index(xts_comb),xts_comb[,'Non-agricultural.unemployment.rate'], col="blue", type="o")
+
+legend(x= 'topleft', legend=c("Unemployement Rate(Percentages)", "non-Agricultural Unemployement Rate(Percentages)"),
+       col=c("red", "blue"), lty=1:2, cex=0.6)
+```   
+   
+Both of these unemployement figures seem to climb from 2013 to 2020. The labour force participation, on the other hand:
+
+```{r , echo=FALSE}
+plot(index(xts_comb),xts_comb[,'Labour.force.participation.rate'],type = "o",  col = "red", xlab = "Quarters", ylab = "Percent Labour Force Participation",
+main = "Figure 3: Labour Force Participation")
+
+legend(x= 'topleft', legend="Labour Force Participation", col="red", lty=1:2, cex=0.6)
+```   
+
+The last step to understand the financial situation of the people could be to examine consumer price index and also consumer price index for urban wage earners.
+
+```{r , echo=FALSE}
+plot(index(xts_comb),xts_comb[,'consumer.price.index'],type = "o", ylim=range( c(xts_comb[,'consumer.price.index'], xts_comb[,'CPI.wage.earners'])), col = "red", xlab = "Quarters", ylab = "CPI General and CPI for Wage Earners",
+main = "Figure 4: CPI General and CPI for Wage Earners")
+   
+lines(index(xts_comb),xts_comb[,'CPI.wage.earners'], col="blue", type="o")
+
+legend(x= 'topleft', legend=c("CPI", "CPI for Wage Earners"),col=c("red", "blue"), lty=1:2, cex=0.6)
+
+plot(index(xts_comb),xts_comb[,'consumer.price.index'],type = "o", ylim=range( c(xts_comb[,'consumer.price.index'])), col = "red", xlab = "Quarters", ylab = "CPI General",
+main = "Figure 5: CPI General")
+   
+
+legend(x= 'topleft', legend=c("CPI"),col=c("red"), lty=1:2, cex=0.6)
+
+plot(index(xts_comb),xts_comb[,'CPI.wage.earners'],type = "o", ylim=range( c( xts_comb[,'CPI.wage.earners'])), col = "blue", xlab = "Quarters", ylab = "CPI for Wage Earners",
+main = "Figure 6: CPI for Wage Earners")
+   
+
+legend(x= 'topleft', legend=c("CPI for Wage Earners"),col=c( "blue"), lty=1:2, cex=0.6)
+
+```   
+
+As illustrated in the graphs, the power of purchase in Turkey has been decreasing since 2013.
+
+For the construction sector, let's take a look at the number of house sales in total, first hand and sales to foreigners on a bar plot.
+
+```{r , echo=FALSE}
+barplot(xts_comb[,c(1:3)], main="Figure 7: House Sales(in numbers)", xlab="Quarters", col=c("darkblue","red","orange"), beside=TRUE)
+legend(x = "topleft",colnames(xts_comb[,c(1:3)]),col=c("darkblue","red","orange"), lty=1:2, cex=0.5)
+
+```
+
+The number of houses sold to foreigners seems negligible.There seems no trend in the house sales and the first sales composes nearly half of total sales throughout the years in question.
+
+
+Now, to see how the cost of purchasind a house varies over time, unit house price per square meter and Residential Property Prices Indices will be illustrated:
+
+```{r , echo=FALSE}
+plot(index(xts_comb),xts_comb[,'Residential.Property.Price.Index'],type = "b",  col = "red", xlab = "Quarters", ylab = "RPPI",
+main = "Figure 8: Residential Property Price Index")
+   
+
+legend(x= 'topleft', legend=c("RPPI"),col=c("red"), lty=1:2, cex=0.6)
+
+plot(index(xts_comb),xts_comb[,'Housing.Unit.Prices'],type = "b", col = "blue", xlab = "Quarters", ylab = "Housing Unit Prices(TL/Sq)",
+main = "Figure 9: Unit Housing Price per Squaremeter")
+   
+
+legend(x= 'topleft', legend=c("Unit Housing Price per Squaremeter"),col=c( "blue"), lty=1:2, cex=0.6)
+```
+
+The houses in Turkey have been stably getting more expensive since 2013 in terms of both per square meter price and overall purchasing index.
+
+Now let's compare the RPPI and unit house prices to CPI for Wage Earners to understand if the price increase in houses is heigher than the general price increase
+
+```{r , echo=FALSE}
+plot(as.matrix(xts_comb[,'CPI.wage.earners']),as.matrix(xts_comb[,'Residential.Property.Price.Index']),xlab = "CPI for Wage Earners", ylab = "RPPI", main = "Figure 10: RPPI as opposed to CPI for Wage Earners")
+
+plot(as.matrix(xts_comb[,'CPI.wage.earners']),as.matrix(xts_comb[,'Housing.Unit.Prices']),xlab = "CPI for Wage Earners", ylab = "Housing Unit Prices(TL/Sq)", main = "Figure 11: Unit Housing Price per Squaremeter as opposed to CPI for Wage Earners")
+
+```
+
+These two graphs prove that the increase in the overall prices for the consumers is faster than the increase in housing prices.
+
+Lastly, let's illustrate the overall GDP and GDP coming form the construction sector on a bar plot:
+
+
+```{r , echo=FALSE}
+barplot(xts_comb[,c(12,11)], main="Figure 12: Total GDP and GDP from Construction", xlab="Quarters", col=c("darkblue","orange"), beside=TRUE)
+legend(x = "topleft",c("GDP(Thousand TL)","Consturction GDP(Thousand TL)"),col=c("darkblue","orange"), lty=1:2, cex=0.6)
+
+barplot(xts_comb[,c(11)], main="Figure 13: GDP from Construction", xlab="Quarters", col=c("orange"), beside=TRUE)
+legend(x = "topleft",c("Consturction GDP(Thousand TL)"),col=c("orange"), lty=1:2, cex=0.6)
+```
+
+The proportion of construction sector in the GDP of Turkey has been constantly decreasing since 2013. Additionally, the production in construction sector seems to have no considerable change but seasonal fluctuations throughout the period.
+
+
+# 3.Concluding Remarks
+
+The employment, labour force participation and CPI data reflects that the financial situation of people of Turkey has been declining; however the number of house sales has increased despite the prices getting higher from year to year. Evethough the price increase is slower than the overall CPI in the last couple of years, the considerably high number of sales could indicate a speculative market expansion.  Additionally, the proportion of construction in the overall GDP, as an indicator of production, is shrinking, which may be a preview of an upcoming burst of the so-called housing bubble.
+
+# 4. References
+
+1. https://en.wikipedia.org/wiki/National_Mortgage_Crisis_of_the_1930s
+2. https://investinganswers.com/dictionary
