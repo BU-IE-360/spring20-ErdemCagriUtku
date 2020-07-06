@@ -7,5 +7,5 @@ The html file and sources code for the homeworks are listed below.
 Click [here](HW1.html) to see the html report and [here](HW1.Rmd) to see the source code.
 
 # Project
-4
+
 Click [here](360Report.html) to see the html report and [here](FullCode.R) to see the source code.
